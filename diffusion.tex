@@ -1,0 +1,196 @@
+\documentclass[11pt, oneside]{article}   	% use "amsart" instead of "article" for AMSLaTeX format
+\usepackage{geometry}                		% See geometry.pdf to learn the layout options. There are lots.
+\geometry{letterpaper}                   		% ... or a4paper or a5paper or ... 
+%\geometry{landscape}                		% Activate for rotated page geometry
+%\usepackage[parfill]{parskip}    		% Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}				% Use pdf, png, jpg, or eps§ with pdflatex; use eps in DVI mode
+								% TeX will automatically convert eps --> pdf in pdflatex		
+\usepackage{amssymb} 
+
+
+\usepackage{mathrsfs} 
+\usepackage[intlimits]{amsmath}
+%SetFonts
+
+%SetFonts
+
+
+\title{Brief Article}
+\author{The Author}
+%\date{}							% Activate to display a given date or no date
+
+\begin{document}
+%\maketitle
+%\section{}
+%\subsection{}
+Review Diffusion model
+
+Problem Formulation: To generate image, we gradually add noise to a given set of images in order to transform it a white noise (Gaussian distribution with mean 0 and variance I).
+
+Forward process: Adding noise to given sample $x_{0}$ gradually and expecting that at the end of process ${x_{T} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})}$.
+
+\[
+	q(x_{1:T}|x_{0}) = q(x_{0}).\prod^{T}_{1} q(x_{t}|x_{t-1})
+\]
+\[
+	q(x_{t}|x_{t-1}) = \mathcal{N}(\sqrt{1-\beta_{t}}\:x_{t-1}, \beta_{t}\bold{I})
+\]
+
+\hspace{0.5cm} Set $\alpha_{t} = 1 - \beta_{t}$ and $\bar{\alpha_{t}} = \prod_{s=1}^{t}{\alpha_{s}}$, we have:
+\[
+	q(x_{t}|x_{t-1}) = \mathcal{N}(\sqrt{\alpha_{t}}\:x_{t-1}, (1-\alpha_{t})\,\bold{I})
+\]
+
+The special point is that, using that notation gives the ability of sampling $x_{t}$ at arbitrary timestep \textit{t}, which is achieved by transformation below:
+\begin{align}
+	x_{t}&= \sqrt{\alpha_{t}}\:x_{t-1} + \sqrt{1-\alpha_{t}}\:z_{t-1} \\
+	&= \sqrt{\alpha_{t}}\:(\sqrt{\alpha_{t-1}}\:x_{t-2} + \sqrt{1-\alpha_{t-1}}\:z_{t-2}) + \sqrt{1-\alpha_{t}}\:z_{t-1} \\
+	&= \sqrt{\alpha_{t}\alpha_{t-1}}\:x_{t-2} + \sqrt{\alpha_{t}(1 - \alpha_{t-1})}\:z_{t-2} + \sqrt{1-\alpha_{t}}\:z_{t-1}
+\end{align}
+
+Where $z_{t-1}$, $z_{t-1} \sim \mathcal{N}(\mathbf{0}, \bold{I})$. Think $\sqrt{\alpha_{t}(1 - \alpha_{t-1})}\:z_{t-2}$ as random variable $u$ and $\sqrt{1-\alpha_{t}}\:z_{t-1}$ as random variable $v$, we have $u \sim \mathcal{N}(\mathbf{0}, \alpha_{t}(1-\alpha_{t-1})\bold{I})$ and $v \sim \mathcal{N}(\mathbf{0}, (1-\alpha_{t})\bold{I})$. Since $u$ and $v$ are independent, $V[u + v] = V[u] + V[v]$ and we have ${(u + v) \sim \mathcal{N}(\mathbf{0}, (1-\alpha_{t}\alpha_{t-1})\bold{I})}$. Then equation (3) can be rewrited as follow:
+\begin{align}
+\mathbf{x_{t}}
+	&= \sqrt{\alpha_{t}\alpha_{t-1}}\:x_{t-2} + (u + v) \\
+	&= \sqrt{\alpha_{t}\alpha_{t-1}}\:x_{t-2} + \sqrt{1-\alpha_{t}\alpha_{t-1}}\:z
+\end{align}
+
+Where ${z \sim \mathcal{N}(\mathbf{0}, \mathbf{I})}$, so we have ${x_{t} \sim \mathcal{N}(\sqrt{\alpha_{t}\alpha_{t-1}}\:x_{t-2}, (1-\alpha_{t}\alpha_{t-1})\mathbf{I})}$. Do this transformation repeatedly and we have closed form for sampling $x_{t}$ from $x_{0}$ as follow:
+\begin{align}
+	\mathbf{x_{t}}
+	&= \sqrt{\alpha_{t}\alpha_{t-1}...\alpha_{1}}\:x_{0} + \sqrt{1-\alpha_{t}\alpha_{t-1}...\alpha_{1}}\:z \\
+	&= \sqrt{\bar{\alpha_{t}}}\:x_{0} + \sqrt{1-\bar{\alpha_{t}}}\:z
+\end{align}
+
+Where ${z \sim \mathcal{N}(\mathbf{0}, \mathbf{I})}$, so ${x_{t} \sim \mathcal{N}(\sqrt{\bar{\alpha_{t}}}\:x_{0}, (1-\bar{\alpha_{t}})\mathbf{I})}$.
+
+\vspace{1cm}
+%Background for deriving loss function
+Background for deriving loss function:
+
+What is ELBO (Evidence Lower Bound)?
+
+\hspace{0.5cm} Let say that in a latent variable model, we posit that our observed data x is a realization of a random variable X. Moreover, we posit the existence of another random variable Z where X and Z are distributed according to a joint distribution $p(X, Z, \theta)$. The Z variable does not have any observation so remains a latent variable. With that model, there are two predominate tasks which are interesting to dig in:
+\begin{itemize}
+	\item Given some fixed value for $\theta$, compute the posterior distribution $p(Z | X, \theta)$.
+	\item Given $\theta$ is unknown, find the maximum likelihood estimate of $\theta$: $\text{argmax}_{\theta}l(\theta)$, where $l(\theta)$ is the log likelihood function:
+	\begin{align*}
+		l(\theta)
+		&=log\left(\,p(x, \theta)\right) \\
+		&=log\int_{z}p(x, z, \theta)dz
+	\end{align*}
+\end{itemize}
+
+The term "evidence" is just a name given to the likelihood function $l(\theta) = log(x, \theta)$, so "evidence lower bound" is the lower bound of likelihood function, which can be derived as follow:
+\begin{align*}
+	log(x, \theta)
+	&=log\int_{z}p(x, z, \theta)dz \\
+	&=log\int_{z}q(z) \frac{p(x, z, \theta)}{q(z)}dz \\
+	&=log\left(\mathbf{E}_{z\sim q}\left[\frac{p(x, z, \theta)}{q(z)}\right]\right) \\
+	&\geq \mathbf{E}_{z \sim q}\left[log\left(\frac{p(x, z, \theta)}{q(z)}\right)\right]
+\end{align*}
+The last inequality follows from Jensen inequality. The gap between evidence and ELBO is KL divergence:
+
+\begin{align*}
+	log\left(p(x, \theta)\right) - \mathbf{E}_{z \sim q}\left[log\left(\frac{p(x, z, \theta)}{q(z)}\right)\right]
+	&= \mathbf{E}_{z \sim q}\left[log\left(p(x, \theta)\right)\right] - \mathbf{E}_{z \sim q}\left[log\left(\frac{p(x, z, \theta)}{q(z)}\right)\right] \\
+	&= \mathbf{E}_{z \sim q}\left[log\left(p(x, \theta)\right) - log\left(\frac{p(x, z, \theta)}{q(z)}\right)\right] \\
+	&= \mathbf{E}_{z \sim q}\left[log\left(p(x, \theta)\frac{q(z)}{p(x, z, \theta)}\right)\right] \\
+	&= \mathbf{E}_{z \sim q}\left[log \frac{q(z)}{p(z|x, \theta)}\right] \\
+	&= \mathbf{D}_{\mathrm{KL}}(q(z)\,||\,p(z|x, \theta)
+\end{align*}
+
+\vspace{1cm}
+
+
+%\hspace{0.5cm} Let say that in a latent variable model, we posit that our observed data x is a realization of a random variable X. Moreover, we posit the existence of another random variable Z where X and Z are distributed according to a joint distribution $p(X, Z, \theta)$
+
+
+%Derive loss function.
+Training is procedure of maximizing negative log likelihood, which can be achieved approximately by maximizing ELBO (variational bound).
+\begin{align*}
+	\mathbf{E}[-\log{p_{\theta}(x_{0})}]
+	&\leq\mathbf{E}_{q}\left[-\log{\frac{p_{\theta}(x_{0:T})}{q(x_{1:T}|x_{0})}}\right]
+\end{align*}
+
+Set $L = \mathbf{E}_{q}\left[-\log{\frac{p_{\theta}(x_{0:T})}{q(x_{1:T}|x_{0})}}\right]$ and make a few transformation, we have:
+\begin{align*}
+	L
+	&=\mathbf{E}_{q}\left[-\log{\frac{p_{\theta}(x_{0:T})}{q(x_{1:T}|x_{0})}}\right] \\
+	&=\mathbf{E}_{q}\left[ -\log{p(x_{T})} - \sum_{t\geq1} \log \frac{p_{\theta}(x_{t-1}|x_{t})}{q(x_{t}|x_{t-1})} \right] \\
+	&=\mathbf{E}_{q}\left[ -\log{p(x_{T})} - \sum_{t>1} \log \frac{p_{\theta}(x_{t-1}|x_{t})}{q(x_{t}|x_{t-1})} - \log(\frac{p_{\theta}(x_{0}|x_{1})}{q(x_{1}|x_{0})})\right] \\
+	&=\mathbf{E}_{q}\left[ -\log{p(x_{T})} - \sum_{t>1} \log \frac{p_{\theta}(x_{t-1}|x_{t})}{q(x_{t-1}|x_{t}, x_{0})}.\frac{q(x_{t-1}|x_{0})}{q(x_{t}|x_{0})} - \log(\frac{p_{\theta}(x_{0}|x_{1})}{q(x_{1}|x_{0})})\right] \text{(apply bayes rule)} \\
+	&=\mathbf{E}_{q}\left[ -\log{p(x_{T})} - \sum_{t>1} \log \frac{p_{\theta}(x_{t-1}|x_{t})}{q(x_{t-1}|x_{t}, x_{0})} -\sum_{t>1}\log\frac{q(x_{t-1}|x_{0})}{q(x_{t}|x_{0})} - \log(\frac{p_{\theta}(x_{0}|x_{1})}{q(x_{1}|x_{0})})\right] \\
+	&=\mathbf{E}_{q}\left[ -\log{p(x_{T})} - \sum_{t>1} \log \frac{p_{\theta}(x_{t-1}|x_{t})}{q(x_{t-1}|x_{t}, x_{0})} - \log\frac{1}{q(x_{T}|x_{0})} - \log(\frac{p_{\theta}(x_{0}|x_{1})}{q(x_{1}|x_{0})})\right] \\
+	&=\mathbf{E}_{q}\left[ -\log\frac{p(x_{T})}{q(x_{T}|x_{0})} - \sum_{t>1} \log \frac{p_{\theta}(x_{t-1}|x_{t})}{q(x_{t-1}|x_{t}, x_{0})} - \log(\frac{p_{\theta}(x_{0}|x_{1})}{q(x_{1}|x_{0})})\right] \\
+\end{align*}
+
+Let $ L_{t} = \mathbf{E}_{q}\left[- \log \frac{p_{\theta}(x_{t-1}|x_{t})}{q(x_{t-1}|x_{t}, x_{0})} \right] $ as an example.
+\begin{align*}
+	\mathbf{E}_{q}\left[- \log \frac{p_{\theta}(x_{t-1}|x_{t})}{q(x_{t-1}|x_{t}, x_{0})} \right] 
+	&= \int q(x_{0:T})\log \frac{q(x_{t-1}|x_{t}, x_{0})}{p_{\theta}(x_{t-1}|x_{t})} dx_{0:T} \\
+	&= \int q(x_{t-1}|x_{t}, x_{0}) q(x_{t}, x_{0}) q(x_{1:t-2}, x_{t+1:T}|x_{0}, x_{t-1}, x_{t}) \log \frac{q(x_{t-1}|x_{t}, x_{0})}{p_{\theta}(x_{t-1}|x_{t})} dx_{0:T} \\
+	&= \int \left[ \int q(x_{t-1}|x_{t}, x_{0}) \log \frac{q(x_{t-1}|x_{t}, x_{0})}{p_{\theta}(x_{t-1}|x_{t})} dx_{t-1}\right] q(x_{0:t-2}, x_{t:T}|x_{t-1}) dx_{0:t-2, t:T} \\
+	&= \int [\mathrm{D}_{\mathrm{KL}}(q(x_{t-1}| x_{0}, x_{t}) || p_{\theta}(x_{t-1}|x_{t}))]\: q(x_{0:t-2}, x_{t:T}|x_{t-1}) dx_{0:t-2, t:T} \\
+	&= \mathbf{E}_{q(x_{0:t-2}, x_{t:T}|x_{t-1})} [\mathrm{D}_{\mathrm{KL}}(q(x_{t-1}| x_{0}, x_{t}) || p_{\theta}(x_{t-1}|x_{t}))]
+\end{align*}
+
+One noticeable property is that with given $x_{t-1}, x_{0}$, $q(x_{t-1}| x_{0}, x_{t})$ and $p_{\theta}(x_{t-1}|x_{t})$ are completely defined and $\mathrm{D}_{\mathrm{KL}}(q(x_{t-1}| x_{0}, x_{t}) || p_{\theta}(x_{t-1}|x_{t}))$ is known, or can be set as a constant. Thus, we have the following equation:
+\[
+\mathbf{E}_{q(x_{t-1})} [\mathrm{D}_{\mathrm{KL}}(q(x_{t-1}| x_{0}, x_{t}) || p_{\theta}(x_{t-1}|x_{t}))] = \mathrm{D}_{\mathrm{KL}}(q(x_{t-1}| x_{0}, x_{t}) || p_{\theta}(x_{t-1}|x_{t}))
+\]
+
+From that observation, we finally get the form of $L_{t}$:
+\begin{align*}
+	\mathbf{E}_{q}\left[- \log \frac{p_{\theta}(x_{t-1}|x_{t})}{q(x_{t-1}|x_{t}, x_{0})} \right] 
+	&= \mathbf{E}_{q(x_{0:t-2}, x_{t:T}|x_{t-1})} [\mathrm{D}_{\mathrm{KL}}(q(x_{t-1}| x_{0}, x_{t}) || p_{\theta}(x_{t-1}|x_{t}))] \\
+	&= \mathbf{E}_{q(x_{0:t-2}, x_{t:T}|x_{t-1})} \mathbf{E}_{q(x_{t-1})} [\mathrm{D}_{\mathrm{KL}}(q(x_{t-1}| x_{0}, x_{t}) || p_{\theta}(x_{t-1}|x_{t}))] \\
+	&= \mathbf{E}_{q(x_{0:T})}[\mathrm{D}_{\mathrm{KL}}(q(x_{t-1}| x_{0}, x_{t}) || p_{\theta}(x_{t-1}|x_{t}))]
+\end{align*}
+
+\vspace{1cm}
+
+Applying above transformation to the general $L$, we get the final form of $L$:
+\begin{align*}
+	L
+	&=\mathbf{E}_{q}\left[-\log{\frac{p_{\theta}(x_{0:T})}{q(x_{1:T}|x_{0})}}\right] \\
+	&=\mathbf{E}_{q}\left[ \mathrm{D}_{\mathrm{KL}}(q(x_{T}|x_{0})||\:p(x_{T})) + \sum_{t>1}\mathrm{D}_{\mathrm{KL}}(q(x_{t-1}|x_{t}, x_{0}) ||\: p_{\theta}(x_{t-1}|x_{t})) + \log(\frac{q(x_{1}|x_{0})}{p_{\theta}(x_{0}|x_{1})})\right]
+\end{align*}
+
+%Derive posterior with extra x0
+We can formulate form of posterior $q(x_{t-1}|x{t}, x_{0})$ base on Bayes rule.
+\begin{align}
+	q(x_{t-1}|x{t}, x_{0})
+	&= \frac{q(x_{t}, x_{t-1}|x_{0})}{q(x_{t}|x_{0})} \\
+	&= q(x_{t}|x_{t-1}, x_{0})\frac{q(x_{t-1}|x_{0})}{q(x_{t}|x_{0})} \\
+	&= q(x_{t}|x_{t-1})\frac{q(x_{t-1}|x_{0})}{q(x_{t}|x_{0})} \\
+	&\propto \text{exp} \left(- \frac{1}{2}(\frac{(x_{t} - \sqrt{\alpha_{t}}\,x_{t-1})^{2}}{\beta_{t}} + \frac{(x_{t-1}-\sqrt{\bar{\alpha}_{t-1}}\,x_{0})^2}{1 - \bar{\alpha}_{t-1}} - \frac{(x_{t}-\sqrt{\bar{\alpha}_{t}}x_{0})^2}{1-\bar{\alpha}_{t}})\right) \\
+	&\text{(Shout out for Cuong Pham)} \nonumber \\
+	&= \text{exp} \left(- \frac{1}{2} ((\frac{\alpha_{t}}{\beta_{t}} + \frac{1}{1-\bar{\alpha}_{t-1}})x^{2}_{t-1} - (\frac{2\sqrt{\alpha_{t}}}{\beta_{t}}x_{t} + \frac{2\sqrt{\bar{\alpha}_{t-1}}}{1-\bar{\alpha}_{t-1}}x_{0})x_{t-1} + \mathbf{C}(x_{t}, x_{0}))\right) \label{eq:12}
+\end{align}
+
+Where $C(x_{t}, x_{0})$ is a term not relating to $x_{t}$. Equation \ref{eq:12} can be derived to Gassian form. Making a simple transformation to do that.
+\begin{align}
+	&(\frac{\alpha_{t}}{\beta_{t}} + \frac{1}{1-\bar{\alpha}_{t-1}})x^{2}_{t-1} - (\frac{2\sqrt{\alpha_{t}}}{\beta_{t}}x_{t} + \frac{2\sqrt{\bar{\alpha}_{t-1}}}{1-\bar{\alpha}_{t-1}}x_{0})x_{t-1} + \mathbf{C}(x_{t}, x_{0}) \\
+	&= (\frac{\alpha_{t}(1-\bar{\alpha}_{t-1}) + \beta_{t}}{\beta_{t}(1-\bar{\alpha}_{t-1})})\,x_{t-1}^2 - 2(\frac{\sqrt{\alpha_{t}}(1-\bar{\alpha}_{t-1})x_{t} + \sqrt{\bar{\alpha}_{t-1}}\beta_{t}x_{0}}{\beta_{t}(1-\bar{\alpha}_{t-1})})x_{t-1} + \mathbf{C}(x_{t}, x_{0}) \\
+	&=\frac{\alpha_{t}-\alpha_{t}\bar{\alpha}_{t-1} + 1 - \alpha_{t}}{\beta_{t}(1-\bar{\alpha}_{t-1})}x_{t-1}^2 - 2(\frac{\sqrt{\alpha_{t}}(1-\bar{\alpha}_{t-1})}{\beta_{t}(1-\bar{\alpha}_{t-1})}x_{t} + \frac{\sqrt{\bar{\alpha}_{t-1}}\beta_{t}}{\beta_{t}(1-\bar{\alpha}_{t-1})}x_{0})x_{t-1} + \mathbf{C}(x_{t}, x_{0}) \\
+	&=\frac{1 - \bar{\alpha}_{t}}{\beta_{t}(1-\bar{\alpha}_{t-1})}x_{t-1}^2 - 2(\frac{\sqrt{\alpha_{t}}(1-\bar{\alpha}_{t-1})}{\beta_{t}(1-\bar{\alpha}_{t-1})}x_{t} + \frac{\sqrt{\bar{\alpha}_{t-1}}\beta_{t}}{\beta_{t}(1-\bar{\alpha}_{t-1})}x_{0})x_{t-1} + \mathbf{C}(x_{t}, x_{0}) \\
+	&=\frac{1 - \bar{\alpha}_{t}}{\beta_{t}(1-\bar{\alpha}_{t-1})}\left( x_{t-1}^2 - 2(\frac{\sqrt{\alpha_{t}}(1-\bar{\alpha}_{t-1})}{1 - \bar{\alpha}_{t}}x_{t} + \frac{\sqrt{\bar{\alpha}_{t-1}}\beta_{t}}{1 - \bar{\alpha}_{t}}x_{0})x_{t-1}\right) + \mathbf{C}(x_{t}, x_{0})
+\end{align}
+
+From here, we have $\mathbf{E}_{q(x_{t-1}|x_{t},x_{0})}[x_{t-1}] = \frac{\sqrt{\alpha_{t}}(1-\bar{\alpha}_{t-1})}{1 - \bar{\alpha}_{t}}x_{t} + \frac{\sqrt{\bar{\alpha}_{t-1}}\beta_{t}}{1 - \bar{\alpha}_{t}}x_{0}$ and ${\mathbf{V}_{q(x_{t-1}|x_{t},x_{0})}[x_{t-1}] = \frac{\beta_{t}(1-\bar{\alpha}_{t-1})}{1 - \bar{\alpha}_{t}}}$.
+ 
+\vspace{1cm}
+
+Training now is to find $p_{\theta}(x_{t-1}|x_{t})$ that approximates $q(x_{t-1}|x_{t}, x_{0})$.
+It is straight to form the reverse probability as a Gaussian distribution: $\mathcal{N}(x_{t-1}, \mu_{\theta}(x_{t}, t), \Sigma_{\theta}(x_{t}, t))$.
+
+According to DDPM, the term $\Sigma_{\theta}$ can be fixed and the model can even create high-quality samples. In detail, it is fixed to $\sigma_{t}^{2}\mathbf{I} = \tilde{\beta}\mathbf{I}$. The critical part is to define an effective way to approximate the $\mu_{\theta}$. As the posterior and the approximate reverse distribution has the same form, we can rewrite the loss as follow.
+
+\begin{align*}
+	\mathrm{D}_{\mathrm{KL}}(q(x_{t-1}| x_{0}, x_{t}) || p_{\theta}(x_{t-1}|x_{t})) 
+	&= \frac{1}{2} \log \frac{\sigma_{t}}{\tilde{\sigma}_{t}} + \frac{\tilde{\sigma}_{t}^2 + \parallel\tilde{\mu} - \mu_{\theta}\parallel^2}{2\sigma_{t}^2} - \frac{1}{2} \\
+	&= \frac{\parallel\tilde{\mu} - \mu_{\theta}\parallel^2}{2\sigma_{t}^2} + C \\
+	&\text{(Due to the assumption of $\sigma_{t}^{2}\mathbf{I} = \tilde{\beta}\mathbf{I}$)}
+\end{align*}
+\end{document}  
